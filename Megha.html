@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Punch Dashboard with Reset</title>
+  <style>
+    body {
+      font-family: Arial;
+      text-align: center;
+      background: #f2f2f2;
+      padding-top: 40px;
+    }
+    input, button {
+      padding: 10px;
+      margin: 8px;
+      font-size: 16px;
+    }
+    .hidden {
+      display: none;
+    }
+    #adminPanel, #userPanel, #passwordSetup {
+      margin-top: 20px;
+    }
+    .signout-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background-color: crimson;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 6px 10px;
+    }
+    ul li {
+      margin: 5px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>MEGHA INFOTECH Punch Dashboard</h1>
+
+  <!-- Login Panel -->
+  <div id="loginPanel">
+    <input id="loginUser" placeholder="Username"><br>
+    <input id="loginPass" type="password" placeholder="Password"><br>
+    <button onclick="login()">Login</button><br>
+    <button onclick="forgetPassword()">Forgot Password?</button>
+  </div>
+
+  <!-- Sign Out Button -->
+  <button id="signOutBtn" class="signout-btn hidden" onclick="signOut()">Sign Out</button>
+
+  <!-- Admin Panel -->
+  <div id="adminPanel" class="hidden">
+    <h2>&#x1F6E0; Admin Panel</h2>
+    <input id="newUser" placeholder="New Username">
+    <button onclick="createUser()">Create User</button>
+    <div id="userList"></div>
+
+    <div id="resetRequests">
+      <h3>&#x1F501; Pending Reset Requests</h3>
+      <ul id="requestList"></ul>
+    </div>
+
+    <button onclick="downloadCSV()">&#x1F4E5; Download CSV Log</button>
+  </div>
+
+  <!-- Password Setup Panel -->
+  <div id="passwordSetup" class="hidden">
+    <h2>&#x1F510; Set New Password</h2>
+    <input id="newPassword" type="password" placeholder="New Password"><br>
+    <button onclick="setNewPassword()">Save Password</button>
+  </div>
+
+  <!-- User Panel -->
+  <div id="userPanel" class="hidden">
+    <h2>&#x1F44B; Welcome, <span id="currentUser"></span></h2>
+    <button onclick="punchIn()">&#x1F552; Punch In</button>
+    <button onclick="punchOut()">&#x1F554; Punch Out</button>
+    <div id="statusMsg" style="margin-top: 20px;"></div>
+  </div>
+
+  <script>
+    const defaultPass = "test#123";
+    let users = JSON.parse(localStorage.getItem("users")) || { "Abu": defaultPass };
+    let resetRequests = JSON.parse(localStorage.getItem("resetRequests")) || [];
+    let logs = JSON.parse(localStorage.getItem("punchLogs")) || [];
+
+    let loggedInUser = null;
+
+    function saveUsers() {
+      localStorage.setItem("users", JSON.stringify(users));
+    }
+
+    function saveResetRequests() {
+      localStorage.setItem("resetRequests", JSON.stringify(resetRequests));
+    }
+
+    function saveLogs() {
+      localStorage.setItem("punchLogs", JSON.stringify(logs));
+    }
+
+    function login() {
+      const user = document.getElementById("loginUser").value.trim();
+      const pass = document.getElementById("loginPass").value.trim();
+
+      if (user === "Admin") {
+        if (pass === users["Admin"] || pass === defaultPass) {
+          loggedInUser = "Admin";
+          showAdminPanel();
+          document.getElementById("signOutBtn").classList.remove("hidden");
+        } else {
+          alert("&#x274C; Incorrect Admin password.");
+        }
+        return;
+      }
+
+      if (users[user]) {
+        if (resetRequests.includes(user)) {
+          alert("&#x1F501; Your password reset is pending admin approval.");
+        } else if (users[user] === defaultPass) {
+          loggedInUser = user;
+          document.getElementById("loginPanel").classList.add("hidden");
+          document.getElementById("passwordSetup").classList.remove("hidden");
+          document.getElementById("signOutBtn").classList.remove("hidden");
+        } else if (users[user] === pass) {
+          loggedInUser = user;
+          showUserPanel();
+          document.getElementById("signOutBtn").classList.remove("hidden");
+        } else {
+          alert("&#x274C; Incorrect password.");
+        }
+      } else {
+        alert("&#x2753; User not found.");
+      }
+    }
+
+    function forgetPassword() {
+      const user = document.getElementById("loginUser").value.trim();
+
+      if (!user) {
+        alert("Enter your username first.");
+        return;
+      }
+
+      if (user === "Admin") {
+        const newPass = prompt("Enter new Admin password:");
+        if (newPass) {
+          users["Admin"] = newPass;
+          saveUsers();
+          alert("&#x1F510; Admin password updated.");
+        }
+      } else if (users[user]) {
+        if (!resetRequests.includes(user)) {
+          resetRequests.push(user);
+          saveResetRequests();
+          alert("&#x1F4E9; Reset request sent to admin. Wait for approval.");
+        } else {
+          alert("Request already sent. Please wait.");
+        }
+      } else {
+        alert("&#x2753; Username not found.");
+      }
+    }
+
+    function setNewPassword() {
+      const newPass = document.getElementById("newPassword").value.trim();
+      if (newPass.length < 4) {
+        alert("Password must be at least 4 characters.");
+        return;
+      }
+      users[loggedInUser] = newPass;
+      saveUsers();
+      alert("&#x2705; Password set.");
+      document.getElementById("passwordSetup").classList.add("hidden");
+      showUserPanel();
+    }
+
+    function signOut() {
+      loggedInUser = null;
+      document.getElementById("loginUser").value = "";
+      document.getElementById("loginPass").value = "";
+      document.getElementById("newPassword").value = "";
+      document.getElementById("newUser").value = "";
+      document.getElementById("statusMsg").innerText = "";
+
+      document.getElementById("loginPanel").classList.remove("hidden");
+      document.getElementById("adminPanel").classList.add("hidden");
+      document.getElementById("userPanel").classList.add("hidden");
+      document.getElementById("passwordSetup").classList.add("hidden");
+      document.getElementById("signOutBtn").classList.add("hidden");
+    }
+
+    function showAdminPanel() {
+      document.getElementById("loginPanel").classList.add("hidden");
+      document.getElementById("adminPanel").classList.remove("hidden");
+      updateUserList();
+      updateResetList();
+    }
+
+    function createUser() {
+      const newUser = document.getElementById("newUser").value.trim();
+      if (!newUser) {
+        alert("Enter username.");
+        return;
+      }
+      if (users[newUser]) {
+        alert("User already exists.");
+        return;
+      }
+      users[newUser] = defaultPass;
+      saveUsers();
+      updateUserList();
+      alert("&#x2705; User created with default password.");
+    }
+
+    function deleteUser(username) {
+      if (confirm(`Delete user '${username}'?`)) {
+        delete users[username];
+        resetRequests = resetRequests.filter(u => u !== username);
+        logs = logs.filter(log => log.user !== username);
+        saveUsers();
+        saveResetRequests();
+        saveLogs();
+        updateUserList();
+        updateResetList();
+      }
+    }
+
+    function approveReset(username) {
+      users[username] = defaultPass;
+      resetRequests = resetRequests.filter(u => u !== username);
+      saveUsers();
+      saveResetRequests();
+      updateResetList();
+      alert(`&#x2705; '${username}' can now log in and reset password.`);
+    }
+
+    function updateUserList() {
+      let html = "<h3>&#x1F465; User List</h3><ul>";
+      for (let u in users) {
+        if (u !== "Admin") {
+          html += `<li>${u} <button onclick="deleteUser('${u}')">&#x274C; Delete</button></li>`;
+        }
+      }
+      html += "</ul>";
+      document.getElementById("userList").innerHTML = html;
+    }
+
+    function updateResetList() {
+      const list = document.getElementById("requestList");
+      list.innerHTML = "";
+      if (resetRequests.length === 0) {
+        list.innerHTML = "<li>No requests</li>";
+        return;
+      }
+      resetRequests.forEach(user => {
+        const li = document.createElement("li");
+        li.innerHTML = `${user} <button onclick="approveReset('${user}')">&#x2705; Approve</button>`;
+        list.appendChild(li);
+      });
+    }
+
+    function showUserPanel() {
+      document.getElementById("loginPanel").classList.add("hidden");
+      document.getElementById("userPanel").classList.remove("hidden");
+      document.getElementById("currentUser").innerText = loggedInUser;
+    }
+
+    function punchIn() {
+      const time = new Date().toLocaleTimeString();
+      const date = new Date().toLocaleDateString();
+      logs.push({ user: loggedInUser, action: "Punch In", time, date });
+      saveLogs();
+      document.getElementById("statusMsg").innerText = "Punched In at " + time;
+    }
+
+    function punchOut() {
+      const time = new Date().toLocaleTimeString();
+      const date = new Date().toLocaleDateString();
+      logs.push({ user: loggedInUser, action: "Punch Out", time, date });
+      saveLogs();
+      document.getElementById("statusMsg").innerText = "Punched Out at " + time;
+    }
+
+    function downloadCSV() {
+      let csv = "Username,Action,Date,Time\n";
+      logs.forEach(log => {
+        csv += `${log.user},${log.action},${log.date},${log.time}\n`;
+      });
+
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "punch_logs.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    // Ensure Admin password exists
+    if (!users["Admin"]) {
+      users["Admin"] = defaultPass;
+      saveUsers();
+    }
+  </script>
+
+</body>
+</html>
